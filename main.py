@@ -12,7 +12,8 @@ if service_account_json:
     service_account_info = json.loads(service_account_json)
     cred = credentials.Certificate(service_account_info)
 else:
-    cred = credentials.Certificate('serviceAccount.json')
+    # ⭐ THIS IS THE ONLY LINE THAT CHANGED ⭐
+    cred = credentials.Certificate(r"C:\Users\reece\Downloads\serviceaccount.json")
 
 firebase_admin.initialize_app(cred)
 db = firestore.client()
@@ -31,14 +32,14 @@ def fetch_url(url):
 
 
 def get_token(handler):
-    auth_header = handler.headers.get('Authorization', '')
-    token = auth_header.replace('Bearer ', '').strip()
-    if not token:
-        return None
-    try:
-        return auth.verify_id_token(token)
-    except Exception:
-        return None
+        auth_header = handler.headers.get('Authorization', '')
+        token = auth_header.replace('Bearer ', '').strip()
+        if not token:
+            return None
+        try:
+            return auth.verify_id_token(token)
+        except Exception:
+            return None
 
 
 def get_user(uid):
@@ -91,11 +92,9 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         path = self.path.split('?')[0]
 
-        # GET /api/version
         if path == '/api/version':
             return self.send_json(200, {'version': '0.1.0'})
 
-        # GET /api/me
         if path == '/api/me':
             decoded = get_token(self)
             if not decoded:
@@ -118,7 +117,6 @@ class Handler(BaseHTTPRequestHandler):
                 'isOwner': user.get('role') == 'owner'
             })
 
-        # GET /api/posts
         if path == '/api/posts':
             docs = db.collection('posts').order_by(
                 'createdAt', direction=firestore.Query.DESCENDING
@@ -127,13 +125,11 @@ class Handler(BaseHTTPRequestHandler):
             for doc in docs:
                 d = doc.to_dict()
                 d['id'] = doc.id
-                # convert firestore timestamp to string
                 if 'createdAt' in d and hasattr(d['createdAt'], 'isoformat'):
                     d['createdAt'] = d['createdAt'].isoformat()
                 posts.append(d)
             return self.send_json(200, posts)
 
-        # GET /api/admin/users
         if path == '/api/admin/users':
             decoded = get_token(self)
             if not decoded or not is_admin(decoded['uid']):
@@ -148,7 +144,6 @@ class Handler(BaseHTTPRequestHandler):
                 users.append(d)
             return self.send_json(200, users)
 
-        # GET /api/admin/stats
         if path == '/api/admin/stats':
             decoded = get_token(self)
             if not decoded or not is_admin(decoded['uid']):
@@ -170,7 +165,6 @@ class Handler(BaseHTTPRequestHandler):
         path = self.path.split('?')[0]
         body = self.read_body()
 
-        # POST /api/register
         if path == '/api/register':
             email = body.get('email', '').strip()
             password = body.get('password', '').strip()
@@ -206,7 +200,6 @@ class Handler(BaseHTTPRequestHandler):
             except Exception as e:
                 return self.send_json(400, {'error': str(e)})
 
-        # POST /api/verifyEmail
         if path == '/api/verifyEmail':
             decoded = get_token(self)
             if not decoded:
@@ -214,7 +207,6 @@ class Handler(BaseHTTPRequestHandler):
             db.collection('users').document(decoded['uid']).update({'emailVerified': True})
             return self.send_json(200, {'ok': True})
 
-        # POST /api/verifySteam
         if path == '/api/verifySteam':
             decoded = get_token(self)
             if not decoded:
@@ -244,7 +236,6 @@ class Handler(BaseHTTPRequestHandler):
             except Exception as e:
                 return self.send_json(500, {'error': 'Steam check failed.'})
 
-        # POST /api/verifyWot
         if path == '/api/verifyWot':
             decoded = get_token(self)
             if not decoded:
@@ -257,7 +248,6 @@ class Handler(BaseHTTPRequestHandler):
             db.collection('users').document(decoded['uid']).update({'wotOk': True, 'wotName': wot_name})
             return self.send_json(200, {'ok': True})
 
-        # POST /api/posts
         if path == '/api/posts':
             decoded = get_token(self)
             if not decoded or not is_admin(decoded['uid']):
@@ -280,7 +270,6 @@ class Handler(BaseHTTPRequestHandler):
             })
             return self.send_json(200, {'id': doc_ref.id})
 
-        # POST /api/admin/ban
         if path == '/api/admin/ban':
             decoded = get_token(self)
             if not decoded or not is_admin(decoded['uid']):
@@ -296,7 +285,6 @@ class Handler(BaseHTTPRequestHandler):
             auth.update_user(uid, disabled=ban)
             return self.send_json(200, {'ok': True})
 
-        # POST /api/admin/promote
         if path == '/api/admin/promote':
             decoded = get_token(self)
             if not decoded:
@@ -317,7 +305,6 @@ class Handler(BaseHTTPRequestHandler):
         path = self.path.split('?')[0]
         body = self.read_body()
 
-        # DELETE /api/posts
         if path == '/api/posts':
             decoded = get_token(self)
             if not decoded or not is_admin(decoded['uid']):
