@@ -12,7 +12,6 @@ if service_account_json:
     service_account_info = json.loads(service_account_json)
     cred = credentials.Certificate(service_account_info)
 else:
-    # ⭐ THIS IS THE ONLY LINE THAT CHANGED ⭐
     cred = credentials.Certificate(r"C:\Users\reece\Downloads\serviceaccount.json")
 
 firebase_admin.initialize_app(cred)
@@ -27,19 +26,19 @@ def fetch_url(url):
     try:
         with urllib.request.urlopen(url) as r:
             return r.read().decode()
-    except Exception as e:
+    except Exception:
         return None
 
 
 def get_token(handler):
-        auth_header = handler.headers.get('Authorization', '')
-        token = auth_header.replace('Bearer ', '').strip()
-        if not token:
-            return None
-        try:
-            return auth.verify_id_token(token)
-        except Exception:
-            return None
+    auth_header = handler.headers.get('Authorization', '')
+    token = auth_header.replace('Bearer ', '').strip()
+    if not token:
+        return None
+    try:
+        return auth.verify_id_token(token)
+    except Exception:
+        return None
 
 
 def get_user(uid):
@@ -59,7 +58,7 @@ def is_admin(uid):
 class Handler(BaseHTTPRequestHandler):
 
     def log_message(self, format, *args):
-        pass  # silence default logging
+        pass
 
     def send_cors(self):
         self.send_header('Access-Control-Allow-Origin', '*')
@@ -233,7 +232,7 @@ class Handler(BaseHTTPRequestHandler):
                     'steamHours': int(hours)
                 })
                 return self.send_json(200, {'ok': True, 'hours': int(hours)})
-            except Exception as e:
+            except Exception:
                 return self.send_json(500, {'error': 'Steam check failed.'})
 
         if path == '/api/verifyWot':
