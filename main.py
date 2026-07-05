@@ -12,7 +12,10 @@ if service_account_json:
     service_account_info = json.loads(service_account_json)
     cred = credentials.Certificate(service_account_info)
 else:
-    cred = credentials.Certificate(r"C:\Users\reece\Downloads\serviceaccount.json")
+    # IMPORTANT:
+    # Railway cannot access your Windows Downloads folder.
+    # So the file MUST be inside your project directory.
+    cred = credentials.Certificate('serviceaccount.json')
 
 firebase_admin.initialize_app(cred)
 db = firestore.client()
