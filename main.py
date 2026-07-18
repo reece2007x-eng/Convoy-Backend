@@ -3,19 +3,16 @@ import json
 import urllib.request
 import urllib.parse
 from http.server import HTTPServer, BaseHTTPRequestHandler
+from datetime import datetime
 import firebase_admin
 from firebase_admin import credentials, auth, firestore
 
-# ---- Firebase init ----
 service_account_json = os.environ.get('FIREBASE_SERVICE_ACCOUNT')
 if service_account_json:
     service_account_info = json.loads(service_account_json)
     cred = credentials.Certificate(service_account_info)
 else:
-    # IMPORTANT:
-    # Railway cannot access your Windows Downloads folder.
-    # So the file MUST be inside your project directory.
-    cred = credentials.Certificate('serviceaccount.json')
+    cred = credentials.Certificate('serviceAccount.json')
 
 firebase_admin.initialize_app(cred)
 db = firestore.client()
@@ -24,6 +21,12 @@ OWNER_UID = os.environ.get('OWNER_UID', '')
 STEAM_KEY = os.environ.get('STEAM_KEY', '')
 PORT = int(os.environ.get('PORT', 3000))
 
+CORS_HEADERS = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET,POST,DELETE,OPTIONS',
+    'Access-Control-Allow-Headers': 'Authorization,Content-Type',
+    'Access-Control-Allow-Credentials': 'true'
+}
 
 def fetch_url(url):
     try:
@@ -31,7 +34,6 @@ def fetch_url(url):
             return r.read().decode()
     except Exception:
         return None
-
 
 def get_token(handler):
     auth_header = handler.headers.get('Authorization', '')
@@ -43,7 +45,6 @@ def get_token(handler):
     except Exception:
         return None
 
-
 def get_user(uid):
     doc = db.collection('users').document(uid).get()
     if doc.exists:
@@ -52,26 +53,23 @@ def get_user(uid):
         return data
     return None
 
-
 def is_admin(uid):
     user = get_user(uid)
     return user and user.get('role') in ['admin', 'owner']
-
 
 class Handler(BaseHTTPRequestHandler):
 
     def log_message(self, format, *args):
         pass
 
-    def send_cors(self):
-        self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Access-Control-Allow-Methods', 'GET,POST,DELETE,OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', 'Authorization,Content-Type')
+    def send_cors_headers(self):
+        for key, value in CORS_HEADERS.items():
+            self.send_header(key, value)
 
     def send_json(self, status, data):
         body = json.dumps(data).encode()
         self.send_response(status)
-        self.send_cors()
+        self.send_cors_headers()
         self.send_header('Content-Type', 'application/json')
         self.send_header('Content-Length', len(body))
         self.end_headers()
@@ -88,14 +86,14 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_OPTIONS(self):
         self.send_response(204)
-        self.send_cors()
+        self.send_cors_headers()
         self.end_headers()
 
     def do_GET(self):
         path = self.path.split('?')[0]
 
         if path == '/api/version':
-            return self.send_json(200, {'version': '0.1.0'})
+            return self.send_json(200, {'version': '0.1.2'})
 
         if path == '/api/me':
             decoded = get_token(self)
@@ -120,17 +118,20 @@ class Handler(BaseHTTPRequestHandler):
             })
 
         if path == '/api/posts':
-            docs = db.collection('posts').order_by(
-                'createdAt', direction=firestore.Query.DESCENDING
-            ).stream()
-            posts = []
-            for doc in docs:
-                d = doc.to_dict()
-                d['id'] = doc.id
-                if 'createdAt' in d and hasattr(d['createdAt'], 'isoformat'):
-                    d['createdAt'] = d['createdAt'].isoformat()
-                posts.append(d)
-            return self.send_json(200, posts)
+            try:
+                docs = db.collection('posts').order_by(
+                    'createdAt', direction=firestore.Query.DESCENDING
+                ).stream()
+                posts = []
+                for doc in docs:
+                    d = doc.to_dict()
+                    d['id'] = doc.id
+                    if 'createdAt' in d and hasattr(d['createdAt'], 'isoformat'):
+                        d['createdAt'] = d['createdAt'].isoformat()
+                    posts.append(d)
+                return self.send_json(200, posts)
+            except Exception as e:
+                return self.send_json(500, {'error': str(e)})
 
         if path == '/api/admin/users':
             decoded = get_token(self)
@@ -179,7 +180,6 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send_json(400, {'error': 'Username already taken.'})
                 user = auth.create_user(email=email, password=password, display_name=username)
                 role = 'owner' if user.uid == OWNER_UID else 'user'
-                from datetime import datetime
                 since = datetime.now().strftime('%b %Y')
                 db.collection('users').document(user.uid).set({
                     'email': email,
@@ -235,7 +235,7 @@ class Handler(BaseHTTPRequestHandler):
                     'steamHours': int(hours)
                 })
                 return self.send_json(200, {'ok': True, 'hours': int(hours)})
-            except Exception:
+            except Exception as e:
                 return self.send_json(500, {'error': 'Steam check failed.'})
 
         if path == '/api/verifyWot':
@@ -258,7 +258,6 @@ class Handler(BaseHTTPRequestHandler):
             body_text = body.get('body', '').strip()
             if not title or not body_text:
                 return self.send_json(400, {'error': 'Title and body required.'})
-            from datetime import datetime
             doc_ref = db.collection('posts').document()
             doc_ref.set({
                 'title': title,
