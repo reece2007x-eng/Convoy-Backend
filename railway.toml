@@ -1,0 +1,8 @@
+[build]
+builder = "nixpacks"
+
+[build.nixpacksPlan.phases.setup]
+nixPkgs = ["python311", "gcc"]
+
+[deploy]
+startCommand = "python main.py"
