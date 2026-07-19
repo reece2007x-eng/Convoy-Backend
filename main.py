@@ -15,7 +15,7 @@ else:
     cred = credentials.Certificate('serviceAccount.json')
 
 firebase_admin.initialize_app(cred)
-db = firestore.client()
+db = firestore.client(database_id='convoy')
 
 OWNER_UID = os.environ.get('OWNER_UID', '')
 STEAM_KEY = os.environ.get('STEAM_KEY', '')
