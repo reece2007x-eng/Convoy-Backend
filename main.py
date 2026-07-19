@@ -5,17 +5,25 @@ import urllib.parse
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from datetime import datetime
 import firebase_admin
-from firebase_admin import credentials, auth, firestore
+from firebase_admin import credentials, auth
+from google.cloud import firestore as gc_firestore
+from google.oauth2 import service_account
 
 service_account_json = os.environ.get('FIREBASE_SERVICE_ACCOUNT')
 if service_account_json:
     service_account_info = json.loads(service_account_json)
-    cred = credentials.Certificate(service_account_info)
 else:
-    cred = credentials.Certificate('serviceAccount.json')
+    with open('serviceAccount.json') as f:
+        service_account_info = json.load(f)
 
+cred = credentials.Certificate(service_account_info)
 firebase_admin.initialize_app(cred)
-db = firestore.client(database_id='convoy')
+
+gc_creds = service_account.Credentials.from_service_account_info(
+    service_account_info,
+    scopes=['https://www.googleapis.com/auth/cloud-platform']
+)
+db = gc_firestore.Client(project='convoy-cd975', database='convoy', credentials=gc_creds)
 
 OWNER_UID = os.environ.get('OWNER_UID', '')
 STEAM_KEY = os.environ.get('STEAM_KEY', '')
@@ -119,9 +127,7 @@ class Handler(BaseHTTPRequestHandler):
 
         if path == '/api/posts':
             try:
-                docs = db.collection('posts').order_by(
-                    'createdAt', direction=firestore.Query.DESCENDING
-                ).stream()
+                docs = db.collection('posts').order_by('createdAt', direction=gc_firestore.Query.DESCENDING).stream()
                 posts = []
                 for doc in docs:
                     d = doc.to_dict()
@@ -190,7 +196,7 @@ class Handler(BaseHTTPRequestHandler):
                     'steamOk': False,
                     'wotOk': False,
                     'banned': False,
-                    'createdAt': firestore.SERVER_TIMESTAMP
+                    'createdAt': gc_firestore.SERVER_TIMESTAMP
                 })
                 custom_token = auth.create_custom_token(user.uid)
                 return self.send_json(200, {
@@ -267,7 +273,7 @@ class Handler(BaseHTTPRequestHandler):
                 'video': body.get('video', ''),
                 'author': decoded['uid'],
                 'date': datetime.now().strftime('%b %d, %Y'),
-                'createdAt': firestore.SERVER_TIMESTAMP
+                'createdAt': gc_firestore.SERVER_TIMESTAMP
             })
             return self.send_json(200, {'id': doc_ref.id})
 
